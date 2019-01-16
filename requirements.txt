@@ -1,5 +1,6 @@
 opencv-python
 tqdm
+docopt
 Pillow
 sh
 torch

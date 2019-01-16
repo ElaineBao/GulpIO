@@ -323,7 +323,7 @@ class GulpChunk(object):
         """
         frame_infos, meta_data = self._get_frame_infos(id_)
         frames = []
-        slice_element = slice_ or slice(0, len(frame_infos))
+        slice_element = slice_ #or slice(0, len(frame_infos))
 
         def extract_frame(frame_info):
             self.fp.seek(frame_info.loc)

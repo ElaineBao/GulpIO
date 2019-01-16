@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from numpy.random import randint
 import json
 from .fileio import GulpDirectory
 from PIL import Image
@@ -99,7 +100,6 @@ class GulpVideoDataset(object):
             segment_indices = self._sample_indices(num_frames)
         else:
             segment_indices = self._get_val_indices(num_frames)
-        print("num_frames:",num_frames,segment_indices)
         frames, meta = self.gd[video_path, segment_indices]
         pil_frames =[Image.fromarray(cv2.cvtColor(cv2_im,cv2.COLOR_BGR2RGB)) for cv2_im in frames]
 
