@@ -510,3 +510,59 @@ class KineticsAdapter(AbstractDatasetAdapter):
                       'frames': frames,
                       'id': vid_id}
             yield result
+
+class MyKineticsAdapter(AbstractDatasetAdapter):
+    """
+    An Adapter for the Kinetics dataset (trimmed).
+    This adapter assumes that the file name of each video has the
+    following patterns:
+        (vid)_(start)_(end).mp4
+    where
+      vid: video id that was assigned by youtube
+      start: the beginning of trimming in the original youtube video
+             in 6 digit-second
+      end: the end of trimming in the original youtube video
+             in 6 digit-second
+    """
+    def __init__(self, list_file,
+                 shuffle=False, frame_size=-1,
+                 shm_dir_path='/dev/shm'):
+        self.list_file = list_file
+        self.video_storage = self.read_file(list_file)
+        self.frame_size = frame_size
+        self.shm_dir_path = shm_dir_path
+        if shuffle:
+            random.shuffle(self.video_storage)
+
+    def read_file(self, list_file):
+        video_info = []
+        with open(list_file, 'r') as f:
+            for line in f:
+                vpath,label = line.strip().split(' ')
+                label = int(label)
+                video_info.append([vpath,label])
+        return video_info
+
+    def __len__(self):
+        return len(self.video_storage)
+
+    def get_bursted_frames(self, video_path):
+        with temp_dir_for_bursting(self.shm_dir_path) as temp_burst_dir:
+            frame_paths = burst_video_into_frames(video_path,
+                                                  temp_burst_dir)
+            frames = list(resize_images(frame_paths, self.frame_size))
+        return frames
+
+    def iter_data(self, slice_element=None):
+        slice_element = slice_element or slice(0, len(self))
+        for vid_info in self.video_storage[slice_element]:
+            video_path,label = vid_info
+            frames = self.get_bursted_frames(video_path)
+            # this is due to current file names of trimmed videos
+            frame_num = len(frames)
+            meta = {'label':label,'frame_num':frame_num}
+
+            result = {'meta': meta,
+                      'frames': frames,
+                      'id': video_path}
+            yield result

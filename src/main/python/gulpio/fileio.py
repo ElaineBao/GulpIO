@@ -334,8 +334,9 @@ class GulpChunk(object):
             if img.ndim > 2:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             return img
-        frames = [extract_frame(frame_info)
-                  for frame_info in frame_infos[slice_element]]
+
+        frames = [extract_frame(frame_infos[int(i)])
+                  for i in slice_element]
         return frames, meta_data
 
     def iter_all(self, accepted_ids=None, shuffle=False):

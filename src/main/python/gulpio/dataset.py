@@ -2,40 +2,44 @@ import os
 import numpy as np
 import json
 from .fileio import GulpDirectory
-
+from PIL import Image
+import cv2
 
 class GulpIOEmptyFolder(Exception):  # pragma: no cover
         pass
 
 
+class VideoRecord(object):
+    def __init__(self, row):
+        self._data = row
+
+    @property
+    def path(self):
+        return self._data[0]
+
+    @property
+    def label(self):
+        return int(self._data[1])
+
 class GulpVideoDataset(object):
 
-    def __init__(self, data_path, num_frames, step_size,
-                 is_val, transform=None, target_transform=None, stack=True,
-                 random_offset=True):
+    def __init__(self, list_file, data_path, num_segments=3, test_mode=False,
+                 transform=None):
         r"""Simple data loader for GulpIO format.
 
             Args:
                 data_path (str): path to GulpIO dataset folder
-                num_frames (int): number of frames to be fetched.
-                step_size (int): number of frames skippid while picking
-            sequence of frames from each video.
-                is_val (bool): sets the necessary augmention procedure.
-                transform (object): set of augmentation steps defined by
-            Compose(). Default is None.
-                target_transform (func):  a transformation function applied to each
-            single target, where target is the id assigned to a label. The
-            mapping from label to id is provided in the `label_idx` member-
-            variable. Default is None.
-                stack (bool): stack frames into a numpy.array. Default is True.
-                random_offset (bool): random offsetting to pick frames, if
-            number of frames are more than what is necessary.
         """
+        self.list_file = list_file
+        self.data_path = data_path
+        self.num_segments = num_segments
+        self.transform = transform
+        self.test_mode = test_mode
+        self._parse_list()
 
         self.gd = GulpDirectory(data_path)
-        self.items = list(self.gd.merged_meta_dict.items())
-        self.label2idx = json.load(open(os.path.join(data_path,
-                                                     'label2idx.json')))
+        self.items = self.gd.merged_meta_dict
+
         self.num_chunks = self.gd.num_chunks
 
         if self.num_chunks == 0:
@@ -43,15 +47,35 @@ class GulpVideoDataset(object):
                                     "of: ".format(data_path)))
 
         print(" > Found {} chunks".format(self.num_chunks))
-        self.data_path = data_path
-        self.classes = self.label2idx.keys()
-        self.transform_video = transform
-        self.target_transform = target_transform
-        self.num_frames = num_frames
-        self.step_size = step_size
-        self.is_val = is_val
-        self.stack = stack
-        self.random_offset = random_offset
+
+
+    def _parse_list(self):
+        self.video_list = [VideoRecord(x.strip().split(' ')) for x in open(self.list_file)]
+
+
+    def _sample_indices(self, num_frames):
+        """
+        :param record: VideoRecord
+        :return: list
+        """
+        average_duration = num_frames // self.num_segments
+
+        if average_duration > 0:
+            offsets = np.multiply(list(range(self.num_segments)), average_duration) + randint(average_duration,
+                                                                                              size=self.num_segments)
+        elif num_frames > self.num_segments:
+            offsets = np.sort(randint(num_frames, size=self.num_segments))
+        else:
+            offsets = np.zeros((self.num_segments,))
+        return offsets
+
+    def _get_val_indices(self, num_frames):
+        if num_frames > self.num_segments:
+            tick = num_frames / float(self.num_segments)
+            offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
+        else:
+            offsets = np.zeros((self.num_segments,))
+        return offsets
 
     def __getitem__(self, index):
         """
@@ -59,47 +83,37 @@ class GulpVideoDataset(object):
         by Pytorch DataLoader threads. Each Dataloader thread loads a single
         batch by calling this function per instance.
         """
-        item_id, item_info = self.items[index]
+        record = self.video_list[index]
+        video_path = record.path
+        label = record.label
+        video_info = self.items[video_path]
 
-        target_name = item_info['meta_data'][0]['label']
-        target_idx = self.label2idx[target_name]
-        frames = item_info['frame_info']
+        target_index = video_info['meta_data'][0]['label']
+        assert label == target_index, "list label != chunk label"
+        frames = video_info['frame_info']
         num_frames = len(frames)
+        num_frames2 = video_info['meta_data'][0]['frame_num']
+        assert num_frames == num_frames2, "frame_info len != chunk frame_num"
         # set number of necessary frames
-        if self.num_frames > -1:
-            num_frames_necessary = self.num_frames * self.step_size
+        if not self.test_mode:
+            segment_indices = self._sample_indices(num_frames)
         else:
-            num_frames_necessary = num_frames
-        offset = 0
-        if num_frames_necessary < num_frames and self.random_offset:
-            # If there are more frames, then sample starting offset.
-            diff = (num_frames - num_frames_necessary)
-            # temporal augmentation
-            if not self.is_val:
-                offset = np.random.randint(0, diff)
-        # set target frames to be loaded
-        frames_slice = slice(offset, num_frames_necessary + offset,
-                             self.step_size)
-        frames, meta = self.gd[item_id, frames_slice]
-        # padding last frame
-        if num_frames_necessary > num_frames:
-            # Pad last frame if video is shorter than necessary
-            frames.extend([frames[-1]] * (num_frames_necessary - num_frames))
-        # augmentation
-        if self.transform_video:
-            frames = self.transform_video(frames)
-        if self.target_transform:
-            target_idx = self.target_transform(target_idx)
+            segment_indices = self._get_val_indices(num_frames)
+        print("num_frames:",num_frames,segment_indices)
+        frames, meta = self.gd[video_path, segment_indices]
+        pil_frames =[Image.fromarray(cv2.cvtColor(cv2_im,cv2.COLOR_BGR2RGB)) for cv2_im in frames]
+
+        if self.transform:
+            pil_frames = self.transform(pil_frames)
         # format data to torch tensor
-        if self.stack:
-            frames = np.stack(frames)
-        return (frames, target_idx)
+
+        return pil_frames, label
 
     def __len__(self):
         """
         This is called by PyTorch dataloader to decide the size of the dataset.
         """
-        return len(self.items)
+        return len(self.video_list)
 
 
 class GulpImageDataset(object):
@@ -161,3 +175,14 @@ class GulpImageDataset(object):
         This is called by PyTorch dataloader to decide the size of the dataset.
         """
         return len(self.items)
+
+
+if __name__ == '__main__':
+
+    list_file = '../../../../bin/test-data.txt'
+    gulp_folder = '../../../../bin/test-data-gulp/'
+    print(list_file,gulp_folder)
+    dataset = GulpVideoDataset(list_file,gulp_folder,num_segments=1)
+
+    for item in dataset:
+        print(item)

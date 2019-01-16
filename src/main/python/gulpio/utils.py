@@ -38,13 +38,13 @@ def burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=None):
       during parallelization
     - Returns path to directory containing frames for the specific video
     """
-    target_mask = os.path.join(temp_burst_dir, '%04d.jpg')
+    target_mask = os.path.join(temp_burst_dir, '%04d.png')
     if not check_ffmpeg_exists():
         raise FFMPEGNotFound()
     try:
         ffmpeg_args = [
             '-i', vid_path,
-            '-q:v', str(1),
+            '-q:v', str(2),
             '-f', 'image2',
             target_mask,
         ]
@@ -58,7 +58,7 @@ def burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=None):
 
 def burst_video_into_frames(vid_path, temp_burst_dir, frame_rate=None):
     burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=frame_rate)
-    return find_images_in_folder(temp_burst_dir, formats=['jpg'])
+    return find_images_in_folder(temp_burst_dir, formats=['png'])
 
 
 class ImageNotFound(Exception):
@@ -139,7 +139,7 @@ def _remove_duplicates_in_metadict(meta_dict):
 #                       Helper Functions for input iterator                   #
 ###############################################################################
 
-def find_images_in_folder(folder, formats=['jpg']):
+def find_images_in_folder(folder, formats=['png']):
     images = []
     for format_ in formats:
         files = glob.glob('{}/*.{}'.format(folder, format_))
