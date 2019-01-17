@@ -456,12 +456,13 @@ class GulpIngestor(object):
         chunk_slices = calculate_chunk_slices(self.videos_per_chunk,
                                               len(self.adapter))
         gulp_directory = GulpDirectory(self.output_folder)
-        new_chunks = gulp_directory.new_chunks(len(chunk_slices))
+        existing_chunk_num = gulp_directory._next_chunk_id() # because 0-indexed
+        new_chunks = gulp_directory.new_chunks(len(chunk_slices)-existing_chunk_num)
         chunk_writer = ChunkWriter(self.adapter)
         with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
             result = executor.map(chunk_writer.write_chunk,
                                   new_chunks,
-                                  chunk_slices)
+                                  chunk_slices[existing_chunk_num])
             for r in tqdm(result,
                           desc='Chunks finished',
                           unit='chunk',
