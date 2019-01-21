@@ -81,8 +81,10 @@ def burst_flows_to_shm(vid_path, alg_type, temp_burst_dir, image_ext, flow_size)
         hsv[..., 1] = 255
         idx = 1
 
-        while ret:
+        while True:
             ret, frame2 = cap.read()
+            if not ret:
+                break
             next = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
             next = resize_by_short_edge(next, flow_size)
 
@@ -191,7 +193,7 @@ def _remove_duplicates_in_metadict(meta_dict):
 ###############################################################################
 
 def find_images_in_folder(folder, format_='.jpg'):
-    files = glob.glob('{}/*.{}'.format(folder, format_))
+    files = glob.glob('{}/*{}'.format(folder, format_))
     return sorted(files)
 
 
