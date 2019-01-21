@@ -14,7 +14,7 @@ Usage:
 
 
 Options:
-    --shuffle=<shuffle>    [default: False]
+    --shuffle=<shuffle>    [default: 0]
     --frame_size=<frame_size>    [default: -1]
     --shm_dir_path=<shm_dir_path>    [default: /dev/shm]
     --videos_per_chunk=<videos_per_chunk>    [default: 100]
@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     shm_dir_path = arguments['--shm_dir_path']
     frame_size = int(arguments['--frame_size'])
-    shuffle = arguments['--shuffle']
+    shuffle = int(arguments['--shuffle'])
     list_file = arguments['<list_file>']
     output_folder = arguments['<output_folder>']
     videos_per_chunk = int(arguments['--videos_per_chunk'])

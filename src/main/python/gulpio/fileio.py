@@ -462,10 +462,10 @@ class GulpIngestor(object):
         with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
             result = executor.map(chunk_writer.write_chunk,
                                   new_chunks,
-                                  chunk_slices[existing_chunk_num])
+                                  chunk_slices[existing_chunk_num:])
             for r in tqdm(result,
                           desc='Chunks finished',
                           unit='chunk',
                           dynamic_ncols=True,
-                          total=len(chunk_slices)):
+                          total=len(chunk_slices)-existing_chunk_num):
                 pass
