@@ -106,8 +106,9 @@ def burst_flows_to_shm(vid_path, alg_type, temp_burst_dir, image_ext, flow_size)
     except Exception as e:
         print(repr(e))
 
-def burst_video_into_flows(vid_path, alg_type, temp_burst_dir, image_ext='.png', flow_size=-1):
-    burst_frames_to_shm(vid_path, temp_burst_dir, flow_size)
+
+def burst_video_into_flows(vid_path, temp_burst_dir, alg_type='tvl1', image_ext='.png', flow_size=-1):
+    burst_flows_to_shm(vid_path, alg_type, temp_burst_dir, image_ext, flow_size)
     return find_images_in_folder(temp_burst_dir, format_=image_ext)
 
 

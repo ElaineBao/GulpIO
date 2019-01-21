@@ -586,12 +586,13 @@ class OpticalFlowAdapter(AbstractDatasetAdapter):
     """
     def __init__(self, list_file,
                  shuffle=False, flow_size=-1, image_ext='.png',
-                 shm_dir_path='/dev/shm'):
+                 optical_flow_alg='tvl1', shm_dir_path='/dev/shm'):
         self.list_file = list_file
         self.video_storage = self.read_file(list_file)
         self.flow_size = flow_size
         self.shm_dir_path = shm_dir_path
         self.image_ext = image_ext
+        self.optical_flow_alg = optical_flow_alg
         if shuffle:
             random.shuffle(self.video_storage)
 
@@ -607,24 +608,24 @@ class OpticalFlowAdapter(AbstractDatasetAdapter):
     def __len__(self):
         return len(self.video_storage)
 
-    def get_bursted_flows(self, video_path, alg_type):
+    def get_bursted_flows(self, video_path):
         with temp_dir_for_bursting(self.shm_dir_path) as temp_burst_dir:
-            flow_paths = burst_video_into_flows(video_path, alg_type, temp_burst_dir,
+            flow_paths = burst_video_into_flows(video_path, temp_burst_dir, alg_type=self.optical_flow_alg,
                                            image_ext=self.image_ext, flow_size=self.flow_size)
             flows = list(resize_images(flow_paths, self.flow_size))
         return flows
 
-    def iter_data(self, alg_type='tvl1',slice_element=None):
+    def iter_data(self, slice_element=None):
         if not slice_element:
             slice_element = slice(0, len(self))
         for vid_info in self.video_storage[slice_element]:
             video_path,label = vid_info
-            flows = self.get_bursted_flows(video_path, alg_type=alg_type)
+            flows = self.get_bursted_flows(video_path)
             # this is due to current file names of trimmed videos
             flow_num = len(flows)
             meta = {'label':label,'flow_num':flow_num}
 
             result = {'meta': meta,
-                      'flows': flows,
+                      'frames': flows,
                       'id': video_path}
             yield result,self.image_ext
