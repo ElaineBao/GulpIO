@@ -4,6 +4,7 @@ import os
 import sh
 import random
 import cv2
+import numpy as np
 import shutil
 import glob
 from contextlib import contextmanager
@@ -31,14 +32,14 @@ def temp_dir_for_bursting(shm_dir_path='/dev/shm'):
     shutil.rmtree(temp_dir)
 
 
-def burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=None):
+def burst_frames_to_shm(vid_path, temp_burst_dir, image_ext, frame_rate=None):
     """
     - To burst frames in a temporary directory in shared memory.
     - Directory name is chosen as random 128 bits so as to avoid clash
       during parallelization
     - Returns path to directory containing frames for the specific video
     """
-    target_mask = os.path.join(temp_burst_dir, '%04d.png')
+    target_mask = os.path.join(temp_burst_dir, '%04d{}'.format(image_ext))
     if not check_ffmpeg_exists():
         raise FFMPEGNotFound()
     try:
@@ -56,9 +57,58 @@ def burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=None):
         print(repr(e))
 
 
-def burst_video_into_frames(vid_path, temp_burst_dir, frame_rate=None):
-    burst_frames_to_shm(vid_path, temp_burst_dir, frame_rate=frame_rate)
-    return find_images_in_folder(temp_burst_dir, formats=['png'])
+def burst_video_into_frames(vid_path, temp_burst_dir, image_ext='.jpg', frame_rate=None):
+    burst_frames_to_shm(vid_path, temp_burst_dir, image_ext, frame_rate=frame_rate)
+    return find_images_in_folder(temp_burst_dir, format_=image_ext)
+
+
+def burst_flows_to_shm(vid_path, alg_type, temp_burst_dir, image_ext, flow_size):
+    try:
+        cap = cv2.VideoCapture(vid_path)
+        if alg_type == 'farn':
+            optical_flow_hdl = cv2.FarnebackOpticalFlow_create(pyrScale=0.702, numLevels=5, winSize=10,
+                                                               numIters=2, polyN=5, polySigma=1.1,
+                                                               flags=cv2.OPTFLOW_FARNEBACK_GAUSSIAN)
+        elif alg_type == 'tvl1':
+            optical_flow_hdl = cv2.DualTVL1OpticalFlow_create()
+        else:
+            raise NotImplementedError('optical flow algorithm {} is not implemented.'.format(alg_type))
+
+        ret, frame1 = cap.read()
+        prvs = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        prvs = resize_by_short_edge(prvs, flow_size)
+        hsv = np.zeros_like(frame1)
+        hsv[..., 1] = 255
+        idx = 1
+
+        while ret:
+            ret, frame2 = cap.read()
+            next = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+            next = resize_by_short_edge(next, flow_size)
+
+            flow = optical_flow_hdl.calc(prvs, next, None)
+
+            """
+			flow_x = cv2.normalize(flow[..., 0], None, 0, 255, cv2.NORM_MINMAX)
+			flow_y = cv2.normalize(flow[..., 1], None, 0, 255, cv2.NORM_MINMAX)
+			flow_x = flow_x.astype('uint8')
+			flow_y = flow_y.astype('uint8')
+			video_flow_list.append([flow_x,flow_y])
+			"""
+            mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+            hsv[..., 0] = ang * 180 / np.pi / 2
+            hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+            bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+            cv2.imwrite(os.path.join(temp_burst_dir, '{:04d}{}'.format(idx,image_ext)), bgr)
+
+            prvs = next
+            idx += 1
+    except Exception as e:
+        print(repr(e))
+
+def burst_video_into_flows(vid_path, alg_type, temp_burst_dir, image_ext='.png', flow_size=-1):
+    burst_frames_to_shm(vid_path, temp_burst_dir, flow_size)
+    return find_images_in_folder(temp_burst_dir, format_=image_ext)
 
 
 class ImageNotFound(Exception):
@@ -139,12 +189,9 @@ def _remove_duplicates_in_metadict(meta_dict):
 #                       Helper Functions for input iterator                   #
 ###############################################################################
 
-def find_images_in_folder(folder, formats=['png']):
-    images = []
-    for format_ in formats:
-        files = glob.glob('{}/*.{}'.format(folder, format_))
-        images.extend(files)
-    return sorted(images)
+def find_images_in_folder(folder, format_='.jpg'):
+    files = glob.glob('{}/*.{}'.format(folder, format_))
+    return sorted(files)
 
 
 def get_single_video_path(folder_name, format_='mp4'):

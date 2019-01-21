@@ -20,12 +20,12 @@ Options:
     --shm_dir_path=<shm_dir_path>    [default: /dev/shm]
     --videos_per_chunk=<videos_per_chunk>    [default: 100]
     --num_workers=<num_workers>    [default: 4]
-    --image_extension=<image_extension>  [default: .jpg]
+    --image_extension=<image_extension>  [default: .png]
     """
 
 
 from docopt import docopt
-from gulpio.adapters import MyKineticsAdapter
+from gulpio.adapters import OpticalFlowAdapter
 from gulpio.fileio import GulpIngestor
 
 if __name__ == "__main__":
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     videos_per_chunk = int(arguments['--videos_per_chunk'])
     num_workers = int(arguments['--num_workers'])
     image_ext = arguments['--image_extension']
-    adapter = MyKineticsAdapter(
+    adapter = OpticalFlowAdapter(
         list_file,
         shuffle,
         frame_size,

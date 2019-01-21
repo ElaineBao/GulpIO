@@ -237,9 +237,9 @@ class GulpChunk(object):
             self.meta_dict[id_] = self._default_factory()
         self.meta_dict[id_]['meta_data'].append(meta_data)
 
-    def _write_frame(self, id_, image):
+    def _write_frame(self, id_, image, image_encode_ext='.jpg'):
         loc = self.fp.tell()
-        img_str = cv2.imencode('.jpg', image)[1].tostring()
+        img_str = cv2.imencode(image_encode_ext, image)[1].tostring()
         assert len(img_str) > 0
         pad = self._pad_image(len(img_str))
         record = img_str.ljust(len(img_str) + pad, b'\0')
@@ -253,9 +253,9 @@ class GulpChunk(object):
         self.meta_dict[id_]['frame_info'].append(img_info)
         self.fp.write(record)
 
-    def _write_frames(self, id_, frames):
+    def _write_frames(self, id_, frames, image_encode_ext='.jpg'):
         for frame in frames:
-            self._write_frame(id_, frame)
+            self._write_frame(id_, frame, image_encode_ext=image_encode_ext)
 
     @contextmanager
     def open(self, flag='rb'):
@@ -288,7 +288,7 @@ class GulpChunk(object):
         self.fp.flush()
         self.serializer.dump(self.meta_dict, self.meta_file_path)
 
-    def append(self, id_, meta_data, frames):
+    def append(self, id_, meta_data, frames, image_encode_ext='.jpg'):
         """ Append an item to the gulp.
 
         Parameters
@@ -303,7 +303,7 @@ class GulpChunk(object):
 
         """
         self._append_meta(id_, meta_data)
-        self._write_frames(id_, frames)
+        self._write_frames(id_, frames, image_encode_ext=image_encode_ext)
 
     def read_frames(self, id_, slice_=None):
         """ Read frames for a single item.
@@ -394,15 +394,16 @@ class ChunkWriter(object):
            The chunk to write to
         input_slice: (slice)
            The slice to use from the adapter.
-
+        image_format: (string)
+            jpg or png, default: jpg
         """
         with output_chunk.open('wb'):
-            for video in self.adapter.iter_data(input_slice):
+            for video, image_encode_ext in self.adapter.iter_data(input_slice):
                 id_ = video['id']
                 meta_data = video['meta']
                 frames = video['frames']
                 if len(frames) > 0:
-                    output_chunk.append(id_, meta_data, frames)
+                    output_chunk.append(id_, meta_data, frames, image_encode_ext=image_encode_ext)
                 else:
                     print("Failed to write video with id: {}; no frames"
                           .format(id_))

@@ -12,6 +12,7 @@ from .utils import (get_single_video_path,
                     resize_images,
                     resize_by_short_edge,
                     burst_video_into_frames,
+                    burst_video_into_flows,
                     temp_dir_for_bursting,
                     remove_entries_with_duplicate_ids,
                     ImageNotFound,
@@ -525,11 +526,12 @@ class MyKineticsAdapter(AbstractDatasetAdapter):
              in 6 digit-second
     """
     def __init__(self, list_file,
-                 shuffle=False, frame_size=-1,
+                 shuffle=False, frame_size=-1, image_ext='.jpg',
                  shm_dir_path='/dev/shm'):
         self.list_file = list_file
         self.video_storage = self.read_file(list_file)
         self.frame_size = frame_size
+        self.image_ext = image_ext
         self.shm_dir_path = shm_dir_path
         if shuffle:
             random.shuffle(self.video_storage)
@@ -549,12 +551,13 @@ class MyKineticsAdapter(AbstractDatasetAdapter):
     def get_bursted_frames(self, video_path):
         with temp_dir_for_bursting(self.shm_dir_path) as temp_burst_dir:
             frame_paths = burst_video_into_frames(video_path,
-                                                  temp_burst_dir)
+                                                  temp_burst_dir, image_ext=self.image_ext)
             frames = list(resize_images(frame_paths, self.frame_size))
         return frames
 
     def iter_data(self, slice_element=None):
-        slice_element = slice_element or slice(0, len(self))
+        if not slice_element:
+            slice_element = slice(0, len(self))
         for vid_info in self.video_storage[slice_element]:
             video_path,label = vid_info
             frames = self.get_bursted_frames(video_path)
@@ -565,4 +568,63 @@ class MyKineticsAdapter(AbstractDatasetAdapter):
             result = {'meta': meta,
                       'frames': frames,
                       'id': video_path}
-            yield result
+            yield result,self.image_ext
+
+
+class OpticalFlowAdapter(AbstractDatasetAdapter):
+    """
+    An Adapter for the optical flow dataset.
+    This adapter assumes that the file name of each video has the
+    following patterns:
+        (vid)_(start)_(end).mp4
+    where
+      vid: video id that was assigned by youtube
+      start: the beginning of trimming in the original youtube video
+             in 6 digit-second
+      end: the end of trimming in the original youtube video
+             in 6 digit-second
+    """
+    def __init__(self, list_file,
+                 shuffle=False, flow_size=-1, image_ext='.png',
+                 shm_dir_path='/dev/shm'):
+        self.list_file = list_file
+        self.video_storage = self.read_file(list_file)
+        self.flow_size = flow_size
+        self.shm_dir_path = shm_dir_path
+        self.image_ext = image_ext
+        if shuffle:
+            random.shuffle(self.video_storage)
+
+    def read_file(self, list_file):
+        video_info = []
+        with open(list_file, 'r') as f:
+            for line in f:
+                vpath,label = line.strip().split(' ')
+                label = int(label)
+                video_info.append([vpath,label])
+        return video_info
+
+    def __len__(self):
+        return len(self.video_storage)
+
+    def get_bursted_flows(self, video_path, alg_type):
+        with temp_dir_for_bursting(self.shm_dir_path) as temp_burst_dir:
+            flow_paths = burst_video_into_flows(video_path, alg_type, temp_burst_dir,
+                                           image_ext=self.image_ext, flow_size=self.flow_size)
+            flows = list(resize_images(flow_paths, self.flow_size))
+        return flows
+
+    def iter_data(self, alg_type='tvl1',slice_element=None):
+        if not slice_element:
+            slice_element = slice(0, len(self))
+        for vid_info in self.video_storage[slice_element]:
+            video_path,label = vid_info
+            flows = self.get_bursted_flows(video_path, alg_type=alg_type)
+            # this is due to current file names of trimmed videos
+            flow_num = len(flows)
+            meta = {'label':label,'flow_num':flow_num}
+
+            result = {'meta': meta,
+                      'flows': flows,
+                      'id': video_path}
+            yield result,self.image_ext
