@@ -86,6 +86,10 @@ class GulpVideoDataset(object):
         """
         record = self.video_list[index]
         video_path = record.path
+        while (video_path not in self.items):
+            index = randint(0, len(self.video_list) - 1)
+            record = self.video_list[index]
+            video_path = record.path
         label = record.label
         video_info = self.items[video_path]
 

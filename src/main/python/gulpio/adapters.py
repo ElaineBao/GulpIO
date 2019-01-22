@@ -623,7 +623,7 @@ class OpticalFlowAdapter(AbstractDatasetAdapter):
             flows = self.get_bursted_flows(video_path)
             # this is due to current file names of trimmed videos
             flow_num = len(flows)
-            meta = {'label':label,'flow_num':flow_num}
+            meta = {'label':label,'frame_num':flow_num}
 
             result = {'meta': meta,
                       'frames': flows,
